@@ -557,6 +557,8 @@ ChatMemory chatMemory = MessageWindowChatMemory.builder()
 | `spring.ai.chat.memory.repository.redis.port` | Redis server port | `6379`
 | `spring.ai.chat.memory.repository.redis.username` | Redis ACL username | _none_
 | `spring.ai.chat.memory.repository.redis.password` | Redis server password | _none_
+| `spring.ai.chat.memory.repository.redis.ssl.enabled` | Whether to enable SSL support. Enabled automatically if `ssl.bundle` is provided unless specified otherwise | `false`
+| `spring.ai.chat.memory.repository.redis.ssl.bundle` | Name of the https://docs.spring.io/spring-boot/reference/features/ssl.html[SSL bundle] to use for the Redis connection | _none_
 | `spring.ai.chat.memory.repository.redis.index-name` | Name of the Redis search index | `chat-memory-idx`
 | `spring.ai.chat.memory.repository.redis.key-prefix` | Key prefix for chat memory entries | `chat-memory:`
 | `spring.ai.chat.memory.repository.redis.time-to-live` | Time to live for chat memory entries (e.g., `24h`, `30d`) | _no expiration_

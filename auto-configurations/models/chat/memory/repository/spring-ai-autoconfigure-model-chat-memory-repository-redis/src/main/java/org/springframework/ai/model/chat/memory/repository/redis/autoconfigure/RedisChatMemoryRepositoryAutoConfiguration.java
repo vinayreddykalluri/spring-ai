@@ -16,6 +16,9 @@
 
 package org.springframework.ai.model.chat.memory.repository.redis.autoconfigure;
 
+import javax.net.ssl.SSLParameters;
+
+import org.jspecify.annotations.Nullable;
 import redis.clients.jedis.DefaultJedisClientConfig;
 import redis.clients.jedis.JedisClientConfig;
 import redis.clients.jedis.RedisClient;
@@ -24,14 +27,19 @@ import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.memory.ChatMemoryRepository;
 import org.springframework.ai.chat.memory.repository.redis.RedisChatMemoryRepository;
 import org.springframework.ai.model.chat.memory.autoconfigure.ChatMemoryAutoConfiguration;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.context.properties.bind.BindResult;
 import org.springframework.boot.context.properties.bind.Bindable;
 import org.springframework.boot.context.properties.bind.Binder;
+import org.springframework.boot.ssl.SslBundle;
+import org.springframework.boot.ssl.SslBundles;
+import org.springframework.boot.ssl.SslOptions;
 import org.springframework.context.annotation.Bean;
 import org.springframework.core.env.Environment;
+import org.springframework.util.Assert;
 import org.springframework.util.StringUtils;
 
 /**
@@ -72,22 +80,45 @@ public class RedisChatMemoryRepositoryAutoConfiguration {
 
 	@Bean
 	@ConditionalOnMissingBean
-	public RedisClient jedisClient(RedisChatMemoryRepositoryProperties properties) {
-		if (StringUtils.hasText(properties.getUsername()) || StringUtils.hasText(properties.getPassword())) {
-			DefaultJedisClientConfig.Builder configBuilder = DefaultJedisClientConfig.builder();
-			if (StringUtils.hasText(properties.getUsername())) {
-				configBuilder.user(properties.getUsername());
-			}
-			if (StringUtils.hasText(properties.getPassword())) {
-				configBuilder.password(properties.getPassword());
-			}
-			JedisClientConfig clientConfig = configBuilder.build();
-			return RedisClient.builder()
-				.hostAndPort(properties.getHost(), properties.getPort())
-				.clientConfig(clientConfig)
-				.build();
+	public RedisClient jedisClient(RedisChatMemoryRepositoryProperties properties,
+			ObjectProvider<SslBundles> sslBundles) {
+		return RedisClient.builder()
+			.hostAndPort(properties.getHost(), properties.getPort())
+			.clientConfig(jedisClientConfig(properties, sslBundles.getIfAvailable()))
+			.build();
+	}
+
+	static JedisClientConfig jedisClientConfig(RedisChatMemoryRepositoryProperties properties,
+			@Nullable SslBundles sslBundles) {
+		DefaultJedisClientConfig.Builder configBuilder = DefaultJedisClientConfig.builder();
+		if (StringUtils.hasText(properties.getUsername())) {
+			configBuilder.user(properties.getUsername());
 		}
-		return RedisClient.builder().hostAndPort(properties.getHost(), properties.getPort()).build();
+		if (StringUtils.hasText(properties.getPassword())) {
+			configBuilder.password(properties.getPassword());
+		}
+		RedisChatMemoryRepositoryProperties.Ssl ssl = properties.getSsl();
+		if (ssl.isEnabled()) {
+			configBuilder.ssl(true);
+			String bundleName = ssl.getBundle();
+			if (StringUtils.hasText(bundleName)) {
+				Assert.state(sslBundles != null, "SslBundles must be available to use SSL bundle '" + bundleName + "'");
+				SslBundle bundle = sslBundles.getBundle(bundleName);
+				configBuilder.sslSocketFactory(bundle.createSslContext().getSocketFactory());
+				SslOptions options = bundle.getOptions();
+				if (options.isSpecified()) {
+					SSLParameters sslParameters = new SSLParameters();
+					if (options.getCiphers() != null) {
+						sslParameters.setCipherSuites(options.getCiphers());
+					}
+					if (options.getEnabledProtocols() != null) {
+						sslParameters.setProtocols(options.getEnabledProtocols());
+					}
+					configBuilder.sslParameters(sslParameters);
+				}
+			}
+		}
+		return configBuilder.build();
 	}
 
 	@Bean
